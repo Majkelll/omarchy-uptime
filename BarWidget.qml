@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "Model.js" as Model
 
 BarWidget {
   id: root
@@ -60,14 +61,22 @@ BarWidget {
   Component.onCompleted: root.syncRegistration()
   Component.onDestruction: if (root.registeredService) root.registeredService.unregisterSurface(root)
 
+  readonly property bool offline: service ? service.networkOffline : false
+
   // A watched site that has never answered is not the same as one that is
-  // down, so the icon dims while the first round of checks is still out.
-  readonly property bool alerting: summary.state === "down"
-  readonly property bool waiting: summary.state === "pending" || summary.state === "empty"
+  // down, so the icon dims while the first round of checks is still out - and
+  // while the machine is offline, when nothing is known about anything.
+  readonly property bool alerting: !offline && summary.state === "down"
+  readonly property bool waiting: offline || summary.state === "pending" || summary.state === "empty"
 
   readonly property string tooltip: {
     if (!service) return "Uptime"
     if (service.configError !== "") return service.configError
+    if (root.offline) {
+      return service.networkDetail === ""
+        ? Model.OFFLINE_TEXT
+        : Model.OFFLINE_TEXT + " (" + service.networkDetail + ")"
+    }
     return summary.text
   }
 

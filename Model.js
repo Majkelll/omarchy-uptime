@@ -16,6 +16,9 @@ var MAX_TIMEOUT = 60
 var MAX_FAILURES = 10
 var MAX_OUTAGES = 50
 
+// Shown wherever the summary would otherwise claim to know something.
+var OFFLINE_TEXT = "No connection - checks paused"
+
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -371,6 +374,24 @@ function checkArgs(site) {
   return [site.id, targetUrl(site), site.timeoutSeconds, site.expectedStatus].join("\t")
 }
 
+// The connectivity line the check script emits before it probes anything.
+// Absent or unreadable means "assume online": a probe that could not run must
+// never be the reason a real outage goes unreported.
+function parseNetwork(text) {
+  var lines = String(text === undefined || text === null ? "" : text).split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var parts = lines[i].split("\t")
+    if (clean(parts[0]) !== "#network") continue
+    var state = clean(parts[1])
+    return {
+      known: state === "online" || state === "offline",
+      online: state !== "offline",
+      detail: clean(parts.length > 2 ? parts[2] : "")
+    }
+  }
+  return { known: false, online: true, detail: "" }
+}
+
 function parseResults(text) {
   var lines = String(text === undefined || text === null ? "" : text).split("\n")
   var out = []
@@ -444,6 +465,16 @@ function applyResult(record, site, result, nowMs) {
     reason: result.reason
   })
   return { record: next, transition: "down" }
+}
+
+// The probe can be wrong: plenty of networks answer HTTP while dropping ICMP,
+// and a captive portal answers everything. A site that replied is proof the
+// machine is online, so a success anywhere in the batch overrules the probe.
+function batchWasOffline(network, results) {
+  if (!network || !network.known || network.online) return false
+  var list = Array.isArray(results) ? results : []
+  for (var i = 0; i < list.length; i++) if (list[i].ok) return false
+  return true
 }
 
 // ------------------------------------------------------------------- summary
@@ -628,6 +659,7 @@ if (typeof module !== "undefined") {
     MAX_TIMEOUT: MAX_TIMEOUT,
     MAX_FAILURES: MAX_FAILURES,
     MAX_OUTAGES: MAX_OUTAGES,
+    OFFLINE_TEXT: OFFLINE_TEXT,
     clean: clean,
     normalizePath: normalizePath,
     parseAddress: parseAddress,
@@ -654,6 +686,8 @@ if (typeof module !== "undefined") {
     dueSites: dueSites,
     checkArgs: checkArgs,
     parseResults: parseResults,
+    parseNetwork: parseNetwork,
+    batchWasOffline: batchWasOffline,
     applyResult: applyResult,
     summary: summary,
     formatDuration: formatDuration,

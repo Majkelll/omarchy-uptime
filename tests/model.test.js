@@ -141,6 +141,34 @@ assert.deepStrictEqual(results, [
   { id: "slow", ok: false, code: "000", latencyMs: 0, reason: "timeout" }
 ])
 
+// ------------------------------------------------------- connectivity probe
+
+const online = Model.parseNetwork("#network\tonline\t10.5\nfast\tok\t200\t84\t")
+assert.deepStrictEqual(online, { known: true, online: true, detail: "10.5" })
+
+const offline = Model.parseNetwork("#network\toffline\tno route to the internet")
+assert.deepStrictEqual(offline, { known: true, online: false, detail: "no route to the internet" })
+
+// A probe that could not run is not an outage
+assert.deepStrictEqual(Model.parseNetwork("#network\tunknown\tping is not installed"),
+  { known: false, online: true, detail: "ping is not installed" })
+// Neither is a missing line
+assert.deepStrictEqual(Model.parseNetwork("fast\tok\t200\t84\t"),
+  { known: false, online: true, detail: "" })
+
+// The connectivity line is not mistaken for a result
+assert.deepStrictEqual(Model.parseResults("#network\tonline\t10.5\nfast\tok\t200\t84\t"),
+  [{ id: "fast", ok: true, code: "200", latencyMs: 84, reason: "" }])
+
+const allFailed = [{ id: "a", ok: false, code: "000", latencyMs: 0, reason: "dns failure" }]
+const oneWorked = allFailed.concat([{ id: "b", ok: true, code: "200", latencyMs: 12, reason: "" }])
+
+assert.strictEqual(Model.batchWasOffline(offline, allFailed), true)
+// A site that answered proves the machine is online, whatever ICMP says
+assert.strictEqual(Model.batchWasOffline(offline, oneWorked), false)
+assert.strictEqual(Model.batchWasOffline(online, allFailed), false)
+assert.strictEqual(Model.batchWasOffline({ known: false, online: true }, allFailed), false)
+
 // -------------------------------------------------------------- state machine
 
 const target = Model.normalizeSite({ id: "t", origin: "a.test", failuresBeforeAlert: 2 }, [])

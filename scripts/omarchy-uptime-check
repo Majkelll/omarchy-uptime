@@ -6,7 +6,9 @@
 #   <id>\t<url>\t<timeout-seconds>\t<expected-status>
 # An expected status of 0 means "any 2xx or 3xx answer counts as up".
 #
-# Each result line is tab separated as well:
+# The machine's own connectivity is probed first and reported on its own line:
+#   #network\t<online|offline|unknown>\t<latency-ms|reason>
+# Then one line per target:
 #   <id>\t<ok|fail>\t<http-code>\t<latency-ms>\t<reason>
 #
 # Targets are probed in parallel. Every result is written with a single printf
@@ -16,6 +18,39 @@ set -uo pipefail
 
 MAX_PARALLEL=8
 USER_AGENT="omarchy-uptime"
+# The host Omarchy's own `omarchy-network-status` probes, reached the same way,
+# so this plugin agrees with the network widget about whether you are online.
+# Overridable for networks that blackhole it, and for testing.
+INTERNET_PROBE=${OMARCHY_UPTIME_PROBE:-1.1.1.1}
+
+# Runs before any target is touched. When the machine itself is offline every
+# site would fail at once and every site would raise an alert, so the caller
+# needs to be able to tell "the internet is gone" from "these sites are gone".
+#
+# Reports `unknown` rather than guessing when ping is unavailable: a probe that
+# cannot run must not be read as an outage.
+probe_connectivity() {
+  local latency
+
+  if ! ip route get "$INTERNET_PROBE" >/dev/null 2>&1; then
+    printf '#network\toffline\tno route to the internet\n'
+    return
+  fi
+
+  if ! command -v ping >/dev/null 2>&1; then
+    printf '#network\tunknown\tping is not installed\n'
+    return
+  fi
+
+  latency=$(LC_ALL=C ping -n -c 1 -W 1 "$INTERNET_PROBE" 2>/dev/null |
+    awk -F'time[=<]' '/time[=<]/ { split($2, parts, " "); print parts[1]; exit }')
+
+  if [[ -z $latency ]]; then
+    printf '#network\toffline\tno answer from %s\n' "$INTERNET_PROBE"
+  else
+    printf '#network\tonline\t%s\n' "$latency"
+  fi
+}
 
 # curl reports transport failures as exit codes; the panel shows this text, so
 # it says what a person would say rather than "exit 28".
@@ -67,6 +102,8 @@ probe() {
 
   printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$state" "$code" "$ms" "$reason"
 }
+
+probe_connectivity
 
 for target in "$@"; do
   IFS=$'\t' read -r id url timeout expected <<<"$target"

@@ -35,6 +35,11 @@ Item {
   property bool stateLoaded: false
   property string configError: ""
   property bool checking: false
+
+  // Set when the machine itself could not reach the internet during the last
+  // batch. Nothing is recorded and nobody is alerted while this is true.
+  property bool networkOffline: false
+  property string networkDetail: ""
   // Epoch milliseconds do not fit in QML's 32-bit int, so every timestamp the
   // plugin keeps is a double.
   property double lastCheckedAt: 0
@@ -113,7 +118,19 @@ Item {
 
   function applyResults(text) {
     var now = Date.now()
+    var network = Model.parseNetwork(text)
     var results = Model.parseResults(text)
+
+    // The machine is offline: every failure in this batch is ours, not theirs.
+    // Records are deliberately left untouched, so `checkedAt` stays where it
+    // was and every site is due again the moment the connection comes back.
+    if (Model.batchWasOffline(network, results)) {
+      service.networkOffline = true
+      service.networkDetail = network.detail
+      return
+    }
+    service.networkOffline = false
+    service.networkDetail = ""
     if (results.length === 0) return
 
     var next = {}
@@ -264,7 +281,9 @@ Item {
     target: "omarchy-uptime"
 
     function check(): void { service.checkNow("") }
-    function status(): string { return service.summary.text }
+    function status(): string {
+      return service.networkOffline ? Model.OFFLINE_TEXT : service.summary.text
+    }
     function list(): string { return Model.serializeConfig(service.sites) }
     function open(): void { service.callSurfaces("open", false) }
     function close(): void { service.callSurfaces("close", true) }

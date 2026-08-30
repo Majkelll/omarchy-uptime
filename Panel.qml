@@ -26,6 +26,7 @@ Panel {
   readonly property int revision: service ? service.revision : 0
   readonly property bool checking: service ? service.checking : false
   readonly property string configError: service ? service.configError : ""
+  readonly property bool networkOffline: service ? service.networkOffline : false
   readonly property string browserCommand: service && service.browserCommand !== ""
     ? service.browserCommand : "omarchy-launch-browser"
 
@@ -398,14 +399,17 @@ Panel {
 
           PanelHero {
             title: "Uptime"
-            meta: root.summary.text
+            // While the machine is offline the summary would report the last
+            // thing it knew as though it still knew it.
+            meta: root.networkOffline ? Model.OFFLINE_TEXT : root.summary.text
             foreground: root.foreground
             fontFamily: root.fontFamily
 
             iconComponent: Component {
               Text {
                 text: "󰐰"
-                color: root.summary.state === "down" ? Color.urgent : root.foreground
+                color: !root.networkOffline && root.summary.state === "down"
+                  ? Color.urgent : root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.display
               }

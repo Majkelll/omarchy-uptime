@@ -17,3 +17,10 @@
 - The header leads with how many sites are up, and every row says when its
   reading was taken.
 - Checks run in one background service rather than once per monitor.
+- The machine's own connectivity is probed before any site is, the same way
+  `omarchy-network-status` does it. When the connection is down the round is
+  discarded whole: nothing recorded, nobody alerted, no timestamps moved, and
+  the popup says so. A site that answered overrules the probe, so a network
+  that drops ICMP still works.
+- Tests run in GitHub Actions, including the check script against a local
+  server.

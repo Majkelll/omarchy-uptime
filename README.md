@@ -26,6 +26,9 @@ everything answers and turns red when it does not.
   ask for it.
 - **Honest status lines.** `Up 2h - 84 ms - checked just now`. When a reading
   was taken is part of the reading.
+- **It knows the difference between your connection and theirs.** Your own
+  link to the internet is checked first; when it is down, nothing is recorded
+  and nobody is alerted.
 - **Keyboard everything.** The popup never needs the mouse.
 
 Checks run in one background service rather than once per monitor, so a
@@ -105,6 +108,30 @@ you added.
 A single failure never raises an alarm. A site is only *down* after
 `failuresBeforeAlert` consecutive failures — two by default. The popup still
 shows every individual check.
+
+### Your connection is checked first
+
+Close the lid at the office, open it on café wifi, and every site you watch
+fails at the same moment — through no fault of theirs. So before any site is
+touched, the plugin checks whether the machine can reach the internet at all,
+the same way Omarchy's own network widget does it: a route to `1.1.1.1`, then
+a one-second ping.
+
+If that fails **and** nothing else answered in the same round, the whole round
+is thrown away. Nothing is recorded, nobody is alerted, and the popup says
+`No connection - checks paused`. No timestamps move either, so every site is
+due again the instant the connection comes back.
+
+A site that answered overrules the probe — plenty of networks serve HTTP while
+dropping ICMP, and a probe that cannot run must never be the reason a real
+outage goes unreported. If `1.1.1.1` is blackholed where you are, point the
+probe somewhere else:
+
+```bash
+OMARCHY_UPTIME_PROBE=9.9.9.9
+```
+
+as an environment variable on the shell session that runs the plugin.
 
 ## Keyboard
 
@@ -222,6 +249,10 @@ Qt, so they run under Node:
 ```bash
 node tests/model.test.js
 ```
+
+`.github/workflows/tests.yml` runs those on every push, plus the check script
+against a local HTTP server so its verdicts — 200, 404, an expected status, a
+refused connection — are exercised for real.
 
 | File | What |
 |---|---|

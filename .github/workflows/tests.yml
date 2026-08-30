@@ -1,0 +1,56 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Model tests
+        run: node tests/model.test.js
+
+      - name: Check script parses
+        run: bash -n scripts/omarchy-uptime-check
+
+      # The plugin runs this file directly. A lost mode bit would break every
+      # check with a permission error and nothing else would notice.
+      - name: Check script is executable
+        run: test -x scripts/omarchy-uptime-check
+
+      - name: Manifest is valid JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
+
+      # End to end against a local server, so the verdicts are exercised for
+      # real without depending on anything outside the runner.
+      - name: Check script verdicts
+        run: |
+          python3 -m http.server 8111 --bind 127.0.0.1 >/dev/null 2>&1 &
+          server=$!
+          trap 'kill $server' EXIT
+          for _ in $(seq 20); do
+            curl -sf -o /dev/null http://127.0.0.1:8111/ && break
+            sleep 0.2
+          done
+
+          out=$(./scripts/omarchy-uptime-check \
+            "$(printf 'up\thttp://127.0.0.1:8111/\t5\t0')" \
+            "$(printf 'notfound\thttp://127.0.0.1:8111/nope\t5\t0')" \
+            "$(printf 'expected\thttp://127.0.0.1:8111/nope\t5\t404')" \
+            "$(printf 'refused\thttp://127.0.0.1:9\t2\t0')")
+          echo "$out"
+
+          grep -qP '^up\tok\t200\t' <<<"$out"
+          grep -qP '^notfound\tfail\t404\t' <<<"$out"
+          grep -qP '^expected\tok\t404\t' <<<"$out"
+          grep -qP '^refused\tfail\t000\t' <<<"$out"
+          grep -qP '^#network\t(online|offline|unknown)\t' <<<"$out"
