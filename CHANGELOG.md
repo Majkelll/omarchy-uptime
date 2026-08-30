@@ -22,5 +22,9 @@
   discarded whole: nothing recorded, nobody alerted, no timestamps moved, and
   the popup says so. A site that answered overrules the probe, so a network
   that drops ICMP still works.
+  Offline is its own state rather than a silence: the bar icon turns the
+  theme's orange, the popup carries a banner saying there is no connection and
+  why, and the summary is labelled as the last known state rather than the
+  current one.
 - Tests run in GitHub Actions, including the check script against a local
   server.

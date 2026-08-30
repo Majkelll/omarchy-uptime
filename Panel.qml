@@ -27,6 +27,8 @@ Panel {
   readonly property bool checking: service ? service.checking : false
   readonly property string configError: service ? service.configError : ""
   readonly property bool networkOffline: service ? service.networkOffline : false
+  readonly property string networkDetail: service ? service.networkDetail : ""
+  readonly property color warningColor: service ? service.warningColor : Model.DEFAULT_WARNING
   readonly property string browserCommand: service && service.browserCommand !== ""
     ? service.browserCommand : "omarchy-launch-browser"
 
@@ -399,17 +401,18 @@ Panel {
 
           PanelHero {
             title: "Uptime"
-            // While the machine is offline the summary would report the last
-            // thing it knew as though it still knew it.
-            meta: root.networkOffline ? Model.OFFLINE_TEXT : root.summary.text
+            // Offline, the summary is the last thing that was known rather
+            // than the current state, and it has to say so.
+            meta: root.networkOffline ? "Last known - " + root.summary.text : root.summary.text
             foreground: root.foreground
             fontFamily: root.fontFamily
 
             iconComponent: Component {
               Text {
                 text: "󰐰"
-                color: !root.networkOffline && root.summary.state === "down"
-                  ? Color.urgent : root.foreground
+                color: root.networkOffline
+                  ? root.warningColor
+                  : (root.summary.state === "down" ? Color.urgent : root.foreground)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.display
               }
@@ -425,6 +428,59 @@ Panel {
                 enabled: !root.checking && root.sites.length > 0
                 opacity: enabled ? 1 : 0.4
                 onClicked: root.refresh()
+              }
+            }
+          }
+
+          // Unmissable on purpose: while the machine is offline, every line
+          // below it is the last thing that was known, not the current state.
+          BorderSurface {
+            visible: root.networkOffline
+            width: parent.width
+            implicitHeight: offlineRow.implicitHeight + Style.spacing.xxl
+            radius: Style.cornerRadius
+            color: Style.hoverFillFor(root.warningColor, root.warningColor)
+            borderSpec: Border.controlSpec("selected", root.warningColor, root.warningColor)
+
+            Row {
+              id: offlineRow
+              anchors.centerIn: parent
+              width: parent.width - Style.spacing.huge * 2
+              spacing: Style.spacing.controlGap
+
+              Text {
+                text: "󰖪"
+                color: root.warningColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.icon
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Column {
+                width: parent.width - Style.space(28)
+                spacing: Style.spacing.xxs
+                anchors.verticalCenter: parent.verticalCenter
+
+                Text {
+                  width: parent.width
+                  text: "No internet connection"
+                  color: root.warningColor
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  width: parent.width
+                  text: root.networkDetail === ""
+                    ? "Checks are paused until it comes back"
+                    : "Checks are paused - " + root.networkDetail
+                  color: root.warningColor
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  elide: Text.ElideRight
+                }
               }
             }
           }

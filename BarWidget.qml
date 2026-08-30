@@ -62,12 +62,12 @@ BarWidget {
   Component.onDestruction: if (root.registeredService) root.registeredService.unregisterSurface(root)
 
   readonly property bool offline: service ? service.networkOffline : false
+  readonly property color warningColor: service ? service.warningColor : Model.DEFAULT_WARNING
 
-  // A watched site that has never answered is not the same as one that is
-  // down, so the icon dims while the first round of checks is still out - and
-  // while the machine is offline, when nothing is known about anything.
+  // Three states, three colours. Offline is the theme's orange rather than its
+  // urgent red: nothing is known to be down, the machine just cannot look.
   readonly property bool alerting: !offline && summary.state === "down"
-  readonly property bool waiting: offline || summary.state === "pending" || summary.state === "empty"
+  readonly property bool waiting: !offline && (summary.state === "pending" || summary.state === "empty")
 
   readonly property string tooltip: {
     if (!service) return "Uptime"
@@ -103,8 +103,9 @@ BarWidget {
     bar: root.bar
     text: "󰐰"
     fontSize: Style.font.icon
-    active: root.alerting
-    dimmed: root.waiting && !root.alerting
+    active: root.alerting || root.offline
+    activeColor: root.offline ? root.warningColor : (bar ? bar.urgent : Color.urgent)
+    dimmed: root.waiting
     tooltipText: root.tooltip
     onPressed: function(mouseButton) {
       if (mouseButton === Qt.RightButton) {

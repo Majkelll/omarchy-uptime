@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Commons
 import "Model.js" as Model
 
 // The headless half of the plugin: it owns the watched sites, the schedule,
@@ -40,6 +41,10 @@ Item {
   // batch. Nothing is recorded and nobody is alerted while this is true.
   property bool networkOffline: false
   property string networkDetail: ""
+
+  // The theme's own orange, for the one state that is neither healthy nor an
+  // outage. Re-read whenever the palette changes underneath us.
+  property color warningColor: Model.DEFAULT_WARNING
   // Epoch milliseconds do not fit in QML's 32-bit int, so every timestamp the
   // plugin keeps is a double.
   property double lastCheckedAt: 0
@@ -198,6 +203,26 @@ Item {
   }
 
   FileView {
+    id: themeColors
+    path: Color.currentThemePath + "/colors.toml"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: service.warningColor = Model.parseWarningColor(text(), Model.DEFAULT_WARNING)
+    onLoadFailed: service.warningColor = Model.DEFAULT_WARNING
+  }
+
+  // Switching themes retargets the symlink the path above resolves through,
+  // which a file watch does not necessarily see. The shell's own palette
+  // changing is the reliable signal that a new theme has landed.
+  Connections {
+    target: Color
+    function onAccentChanged() { themeColors.reload() }
+    function onBackgroundChanged() { themeColors.reload() }
+    function onForegroundChanged() { themeColors.reload() }
+  }
+
+  FileView {
     id: stateFile
     path: service.statePath
     watchChanges: false
@@ -301,6 +326,7 @@ Item {
     Qt.callLater(function() {
       configFile.reload()
       stateFile.reload()
+      themeColors.reload()
     })
   }
 }

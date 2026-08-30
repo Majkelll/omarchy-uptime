@@ -9,6 +9,9 @@ everything answers and turns red when it does not.
 
 ![The Uptime popup, with two sites up and one down](preview.png)
 
+<sub>Screenshots use the Gruvbox theme — the plugin takes its colours from
+whichever Omarchy theme you run, including the orange it warns with.</sub>
+
 ## What it gives you
 
 - **A list you can actually keep.** Add a site from the top of the popup, edit
@@ -27,8 +30,9 @@ everything answers and turns red when it does not.
 - **Honest status lines.** `Up 2h - 84 ms - checked just now`. When a reading
   was taken is part of the reading.
 - **It knows the difference between your connection and theirs.** Your own
-  link to the internet is checked first; when it is down, nothing is recorded
-  and nobody is alerted.
+  link to the internet is checked first. When it is down the bar icon turns
+  orange, the popup says so in as many words, and nothing is recorded or
+  alerted.
 - **Keyboard everything.** The popup never needs the mouse.
 
 Checks run in one background service rather than once per monitor, so a
@@ -118,9 +122,19 @@ the same way Omarchy's own network widget does it: a route to `1.1.1.1`, then
 a one-second ping.
 
 If that fails **and** nothing else answered in the same round, the whole round
-is thrown away. Nothing is recorded, nobody is alerted, and the popup says
-`No connection - checks paused`. No timestamps move either, so every site is
-due again the instant the connection comes back.
+is thrown away. Nothing is recorded and nobody is alerted. No timestamps move
+either, so every site is due again the instant the connection comes back.
+
+It says so plainly rather than quietly doing nothing: the bar icon turns
+orange — not the red it uses for an outage, because nothing is known to be
+down — and the popup leads with a banner. Every line underneath is labelled
+`Last known`, because that is what it is.
+
+![The popup with no internet connection: an orange banner and the last known state](docs/offline.png)
+
+The orange is the active theme's own, resolved the way Omarchy's
+`omarchy-theme-color` resolves it, so it is the same hue every other Omarchy
+surface would use for a warning.
 
 A site that answered overrules the probe — plenty of networks serve HTTP while
 dropping ICMP, and a probe that cannot run must never be the reason a real

@@ -19,6 +19,9 @@ var MAX_OUTAGES = 50
 // Shown wherever the summary would otherwise claim to know something.
 var OFFLINE_TEXT = "No connection - checks paused"
 
+// Used only when the active theme carries neither an orange nor a yellow.
+var DEFAULT_WARNING = "#e0a458"
+
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -477,6 +480,31 @@ function batchWasOffline(network, results) {
   return true
 }
 
+// ------------------------------------------------------------------- theme
+
+function matchColorKey(raw, key) {
+  var lines = String(raw === undefined || raw === null ? "" : raw).split("\n")
+  var pattern = new RegExp("^\\s*" + key + "\\s*=\\s*[\"']?(#[0-9A-Fa-f]{6})")
+  for (var i = 0; i < lines.length; i++) {
+    var found = pattern.exec(lines[i])
+    if (found) return found[1]
+  }
+  return ""
+}
+
+// "Offline" is a third state, and the palette the shell exposes only has an
+// accent and an urgent. Themes carry an orange of their own; the handful that
+// do not carry a yellow, which is the same fallback Omarchy's own
+// `omarchy-theme-color` applies - so a warning here is the hue every other
+// Omarchy surface would have picked.
+function parseWarningColor(raw, fallback) {
+  var orange = matchColorKey(raw, "orange")
+  if (orange !== "") return orange
+  var yellow = matchColorKey(raw, "yellow")
+  if (yellow !== "") return yellow
+  return clean(fallback) !== "" ? fallback : DEFAULT_WARNING
+}
+
 // ------------------------------------------------------------------- summary
 
 function summary(sites, records) {
@@ -660,6 +688,7 @@ if (typeof module !== "undefined") {
     MAX_FAILURES: MAX_FAILURES,
     MAX_OUTAGES: MAX_OUTAGES,
     OFFLINE_TEXT: OFFLINE_TEXT,
+    DEFAULT_WARNING: DEFAULT_WARNING,
     clean: clean,
     normalizePath: normalizePath,
     parseAddress: parseAddress,
@@ -687,6 +716,8 @@ if (typeof module !== "undefined") {
     checkArgs: checkArgs,
     parseResults: parseResults,
     parseNetwork: parseNetwork,
+    matchColorKey: matchColorKey,
+    parseWarningColor: parseWarningColor,
     batchWasOffline: batchWasOffline,
     applyResult: applyResult,
     summary: summary,

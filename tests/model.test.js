@@ -169,6 +169,20 @@ assert.strictEqual(Model.batchWasOffline(offline, oneWorked), false)
 assert.strictEqual(Model.batchWasOffline(online, allFailed), false)
 assert.strictEqual(Model.batchWasOffline({ known: false, online: true }, allFailed), false)
 
+// ------------------------------------------------------------- theme colour
+
+const palette = ['mode = "dark"', 'accent = "#7aa2f7"', 'red = "#f7768e"',
+  'yellow = "#e0af68"', 'orange = "#eb927b"'].join("\n")
+assert.strictEqual(Model.parseWarningColor(palette, ""), "#eb927b")
+// A theme with no orange falls back to its yellow, the way Omarchy's own
+// resolver does
+assert.strictEqual(Model.parseWarningColor('yellow = "#d9dbdc"', ""), "#d9dbdc")
+// And with neither, to something rather than nothing
+assert.strictEqual(Model.parseWarningColor("accent = \"#7aa2f7\"", ""), Model.DEFAULT_WARNING)
+assert.strictEqual(Model.parseWarningColor("", "#123456"), "#123456")
+assert.strictEqual(Model.matchColorKey(palette, "accent"), "#7aa2f7")
+assert.strictEqual(Model.matchColorKey(palette, "green"), "")
+
 // -------------------------------------------------------------- state machine
 
 const target = Model.normalizeSite({ id: "t", origin: "a.test", failuresBeforeAlert: 2 }, [])
