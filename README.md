@@ -278,7 +278,8 @@ Removing a site discards its history.
 - `curl` and `bash`, plus `omarchy-notification-send` and
   `omarchy-launch-browser` — all part of a base Omarchy install.
 
-No package is installed, no daemon is started, and no `sudo` is required.
+No package is installed, no daemon is started, and nothing runs with
+elevated privileges.
 
 ## Development
 
