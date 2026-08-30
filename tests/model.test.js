@@ -318,13 +318,10 @@ const stampAt = new Date(2026, 7, 28, 9, 5).getTime()
 assert.strictEqual(Model.formatStamp(stampAt), "28 Aug 09:05")
 assert.strictEqual(Model.formatStamp(0), "")
 
-assert.strictEqual(Model.formatAgo(0, now), "never")
-assert.strictEqual(Model.formatAgo(now - 5000, now), "just now")
-// A reading past the ten second window reports its real age rather than
-// hiding most of a 60s check interval behind "just now"
-assert.strictEqual(Model.formatAgo(now - 24_000, now), "24s ago")
-assert.strictEqual(Model.formatAgo(now - 59_000, now), "59s ago")
-assert.strictEqual(Model.formatAgo(now - 300_000, now), "5m ago")
+// Built from local-time parts so the assertion holds in any timezone
+assert.strictEqual(Model.formatClock(new Date(2026, 7, 30, 15, 42, 3).getTime()), "15:42:03")
+assert.strictEqual(Model.formatClock(new Date(2026, 7, 30, 9, 5, 0).getTime()), "09:05:00")
+assert.strictEqual(Model.formatClock(0), "")
 
 assert.strictEqual(Model.latencyLabel({ latencyMs: 84 }), "84 ms")
 assert.strictEqual(Model.latencyLabel({ latencyMs: 2400 }), "2.4 s")
@@ -335,38 +332,36 @@ assert.strictEqual(Model.failureLabel({ code: "000", reason: "timeout" }), "time
 assert.strictEqual(Model.failureLabel({ code: "000", reason: "" }), "no answer")
 
 // Every line names what each number is, and says how old the reading is.
+// A fixed local wall-clock instant, so the expected strings are stable
+const readAt = new Date(2026, 7, 30, 15, 42, 3).getTime()
+
 const downRecord = Object.assign(Model.emptyRecord(), {
-  state: "down", since: now - 300_000, code: "503", checkedAt: now - 8000
+  state: "down", since: now - 300_000, code: "503", checkedAt: readAt
 })
 assert.strictEqual(Model.statusLine(watched[0], downRecord, now),
-  "Down 5m | HTTP 503 | updated just now")
-assert.strictEqual(
-  Model.statusLine(watched[0], Object.assign({}, downRecord, { checkedAt: now - 30_000 }), now),
-  "Down 5m | HTTP 503 | updated 30s ago")
+  "Down 5m | HTTP 503 | updated 15:42:03")
 
 const upRecord = Object.assign(Model.emptyRecord(), {
-  state: "up", since: now - 7_200_000, latencyMs: 84, checkedAt: now - 120_000
+  state: "up", since: now - 7_200_000, latencyMs: 84, checkedAt: readAt
 })
 assert.strictEqual(Model.statusLine(watched[0], upRecord, now),
-  "Up 2h | replied in 84 ms | updated 2m ago")
+  "Up 2h | replied in 84 ms | updated 15:42:03")
 
-// The regression this format exists for: a reading that is minutes old must
-// say so. The panel used to derive its clock from the checks themselves, so
-// every row claimed "just now" however stale it really was.
-const stale = Object.assign({}, upRecord, { checkedAt: now - 45 * 60_000 })
-assert.strictEqual(Model.statusLine(watched[0], stale, now),
-  "Up 2h | replied in 84 ms | updated 45m ago")
-assert.strictEqual(
-  Model.statusLine(watched[0], Object.assign({}, upRecord, { checkedAt: now - 3_600_000 }), now),
-  "Up 2h | replied in 84 ms | updated 1h ago")
+// The regression this part of the line exists for. It used to be a relative
+// age driven by the panel's own clock, and when that clock stopped advancing
+// every row claimed to have been updated "just now" forever. A wall-clock
+// time cannot go stale: the same reading reads the same however long the
+// panel has been sitting open.
+assert.strictEqual(Model.statusLine(watched[0], upRecord, now + 45 * 60_000),
+  "Up 2h 45m | replied in 84 ms | updated 15:42:03")
 
 // Failing right now, but not yet down: that outranks the last good latency
 assert.strictEqual(
   Model.statusLine(watched[0], Object.assign({}, upRecord, { failures: 1 }), now),
-  "Up 2h | 1 failing check | updated 2m ago")
+  "Up 2h | 1 failing check | updated 15:42:03")
 assert.strictEqual(
   Model.statusLine(watched[0], Object.assign({}, upRecord, { failures: 2 }), now),
-  "Up 2h | 2 failing checks | updated 2m ago")
+  "Up 2h | 2 failing checks | updated 15:42:03")
 
 // A record with no check behind it says nothing about when it was read
 assert.strictEqual(

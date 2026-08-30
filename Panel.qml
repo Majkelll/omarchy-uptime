@@ -81,23 +81,23 @@ Panel {
   readonly property real dotColumn: Style.space(18)
   readonly property real detailIndent: Style.spacing.rowPaddingX + dotColumn
 
-  // One clock the whole panel shares. `revision` alone is not enough to drive
-  // it: sites are checked in one batch, so every moment the panel re-rendered
-  // was a moment every site had just been checked, and every row claimed to be
-  // "updated just now" however stale the reading really was. `tick` advances on
-  // its own while the panel is open, so the ages on screen actually age.
-  property int tick: 0
-  readonly property double nowMs: {
-    root.revision
-    root.tick
-    return Date.now()
-  }
+  // The panel's clock, assigned rather than derived. It used to be a binding
+  // whose body read `revision` and `tick` as bare statements to register them
+  // as dependencies - which QML is free to discard, since nothing consumes
+  // their values. It did, the binding never re-evaluated, and every row froze
+  // at whatever time the panel first drew. Assigning leaves nothing to infer.
+  property double nowMs: Date.now()
+
+  function markTime() { root.nowMs = Date.now() }
+
+  onRevisionChanged: root.markTime()
+  onOpenedChanged: if (root.opened) root.markTime()
 
   Timer {
-    interval: 5000
+    interval: 1000
     repeat: true
     running: root.opened
-    onTriggered: root.tick = root.tick + 1
+    onTriggered: root.markTime()
   }
 
   function colorForState(state) {
@@ -1088,7 +1088,7 @@ Panel {
           }
 
           Text {
-            text: "Enter history - e edit - o open - x stop watching - / add - r check now - p pause"
+            text: "Enter history - e edit - o open - x remove - / add - r check - p pause"
             color: root.faint
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

@@ -597,16 +597,14 @@ function formatStamp(epochMs) {
   return pad(at.getDate()) + " " + MONTHS[at.getMonth()] + " " + pad(at.getHours()) + ":" + pad(at.getMinutes())
 }
 
-// "just now" covers ten seconds, not the three quarters of a minute a rounder
-// threshold would: sites are commonly checked every 60s, and a window that
-// wide would label almost every reading's whole life "just now" - which is
-// precisely the staleness this is here to expose.
-function formatAgo(epochMs, nowMs) {
+// The wall-clock time a reading was taken. An absolute time needs no clock of
+// its own to stay true, which a relative age does - and getting that wrong is
+// how every row came to claim it had been updated "just now" forever.
+function formatClock(epochMs) {
   var value = toInt(epochMs, 0)
-  if (value <= 0) return "never"
-  var elapsed = Math.max(0, nowMs - value)
-  if (elapsed < 10000) return "just now"
-  return formatDuration(elapsed) + " ago"
+  if (value <= 0) return ""
+  var at = new Date(value)
+  return pad(at.getHours()) + ":" + pad(at.getMinutes()) + ":" + pad(at.getSeconds())
 }
 
 function latencyLabel(record) {
@@ -652,7 +650,7 @@ function statusLine(site, record, nowMs) {
 
   // How old the reading is belongs on every line: "Up 2h" from a check that
   // last ran an hour ago is a different claim from the same line a second old.
-  if (current.checkedAt > 0) parts.push("updated " + formatAgo(current.checkedAt, nowMs))
+  if (current.checkedAt > 0) parts.push("updated " + formatClock(current.checkedAt))
   return parts.join(" | ")
 }
 
@@ -738,7 +736,7 @@ if (typeof module !== "undefined") {
     summary: summary,
     formatDuration: formatDuration,
     formatStamp: formatStamp,
-    formatAgo: formatAgo,
+    formatClock: formatClock,
     latencyLabel: latencyLabel,
     failureLabel: failureLabel,
     statusLine: statusLine,
