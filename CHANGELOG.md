@@ -15,7 +15,9 @@
 - Bar icon (a pulse) stays quiet while everything answers and turns urgent when
   it does not; it can be hidden entirely until something breaks.
 - The header leads with how many sites are up, and every row names what each
-  of its numbers is: `Up 5m | replied in 200 ms | updated 15s ago`.
+  of its numbers is: `Up 5m | replied in 200 ms | updated 16:03:47`. The last
+  part is the wall-clock time of the request rather than an age, so it stays
+  true however long the popup sits open.
 - A play/pause control stops every check at once, persisted across restarts;
   the bar icon becomes a pause mark so a stopped plugin never reads as a
   healthy one.

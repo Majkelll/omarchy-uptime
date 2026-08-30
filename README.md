@@ -27,8 +27,11 @@ whichever Omarchy theme you run, including the orange it warns with.</sub>
 - **Outage history, out of the way.** Every row knows when it stopped
   answering, how long it was out, and what the failure was — hidden until you
   ask for it.
-- **Honest status lines.** `Up 2h - 84 ms - checked just now`. When a reading
-  was taken is part of the reading.
+- **Rows that say what their numbers mean.**
+  `Up 5m | replied in 200 ms | updated 16:03:47` — how long it has been up, how
+  fast it answered, and the clock time that reading was taken. A green line off
+  a check that last ran an hour ago is not the same claim as one a second old,
+  so the line says which it is.
 - **It knows the difference between your connection and theirs.** Your own
   link to the internet is checked first. When it is down the bar icon turns
   orange, the popup says so in as many words, and nothing is recorded or
