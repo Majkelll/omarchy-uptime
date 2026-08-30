@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.majkelll.omarchy-uptime",
+  "name": "Uptime",
+  "version": "1.0.0",
+  "author": "Majkelll",
+  "license": "MIT",
+  "description": "Watch the sites you care about from the Omarchy bar, with outage history and a notification when one stops answering",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Uptime",
+    "description": "Health checks for the sites you watch, with per-site history and desktop alerts",
+    "category": "Network",
+    "aliases": [
+      "uptime",
+      "healthcheck",
+      "monitor"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "hideWhenHealthy": false
+    },
+    "schema": [
+      {
+        "key": "hideWhenHealthy",
+        "type": "boolean",
+        "label": "Only show when something is down",
+        "defaultValue": false,
+        "description": "Hides the bar icon while every watched site is answering."
+      }
+    ]
+  }
+}

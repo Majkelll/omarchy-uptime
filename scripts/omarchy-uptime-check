@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Probe every target given on the command line and print one result line each.
+#
+# Each argument is one target, tab separated:
+#   <id>\t<url>\t<timeout-seconds>\t<expected-status>
+# An expected status of 0 means "any 2xx or 3xx answer counts as up".
+#
+# Each result line is tab separated as well:
+#   <id>\t<ok|fail>\t<http-code>\t<latency-ms>\t<reason>
+#
+# Targets are probed in parallel. Every result is written with a single printf
+# well under PIPE_BUF, so the concurrent writes cannot interleave.
+
+set -uo pipefail
+
+MAX_PARALLEL=8
+USER_AGENT="omarchy-uptime"
+
+# curl reports transport failures as exit codes; the panel shows this text, so
+# it says what a person would say rather than "exit 28".
+reason_for() {
+  case "$1" in
+    5 | 6) echo "dns failure" ;;
+    7) echo "connection refused" ;;
+    28) echo "timeout" ;;
+    35 | 51 | 58 | 59 | 60 | 77 | 83) echo "tls failure" ;;
+    52) echo "empty reply" ;;
+    56) echo "connection reset" ;;
+    *) echo "unreachable" ;;
+  esac
+}
+
+probe() {
+  local id=$1 url=$2 timeout=$3 expected=$4
+  local output status code seconds ms state reason
+
+  output=$(curl --silent --output /dev/null --no-keepalive \
+    --max-time "$timeout" --connect-timeout "$timeout" \
+    --user-agent "$USER_AGENT" \
+    --write-out '%{http_code} %{time_total}' \
+    "$url" 2>/dev/null)
+  status=$?
+
+  code=${output%% *}
+  seconds=${output##* }
+  [[ $code =~ ^[0-9]+$ ]] || code="000"
+  [[ $seconds =~ ^[0-9]+([.][0-9]+)?$ ]] || seconds="0"
+  # Bash has no floats; scale by hand rather than shell out to bc. The dot is
+  # forced in first so a whole-second reading can't have its integer part
+  # mistaken for milliseconds.
+  [[ $seconds == *.* ]] || seconds="$seconds.0"
+  ms=$(( ${seconds%%.*} * 1000 + 10#$(printf '%s' "${seconds#*.}000" | cut -c1-3) ))
+
+  reason=""
+  if (( status != 0 )); then
+    state="fail"
+    reason=$(reason_for "$status")
+    code="000"
+  elif (( expected > 0 )); then
+    if (( code == expected )); then state="ok"; else state="fail"; fi
+  elif (( code >= 200 && code < 400 )); then
+    state="ok"
+  else
+    state="fail"
+  fi
+
+  printf '%s\t%s\t%s\t%s\t%s\n' "$id" "$state" "$code" "$ms" "$reason"
+}
+
+for target in "$@"; do
+  IFS=$'\t' read -r id url timeout expected <<<"$target"
+  [[ -n ${id:-} && -n ${url:-} ]] || continue
+
+  while (( $(jobs -rp | wc -l) >= MAX_PARALLEL )); do
+    wait -n 2>/dev/null || break
+  done
+
+  probe "$id" "$url" "${timeout:-5}" "${expected:-0}" &
+done
+
+wait
