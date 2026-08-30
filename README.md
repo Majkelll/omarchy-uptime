@@ -70,10 +70,11 @@ outage marked as such.
 
 ### Edit mode
 
-The pencil opens the whole site: its name, its address, its health check path,
-how often it is checked, which status code counts as healthy, how many
-failures in a row count as an outage, and whether it is watched at all.
-Nothing is written until you hit Save, and Escape cancels.
+The pencil opens every field a site has: its name, its address, its health
+check path, how often it is checked, how long a check may take before it
+counts as a failure, which status code counts as healthy, how many failures in
+a row count as an outage, and whether it is watched at all. Nothing is written
+until you hit Save, and Escape cancels.
 
 ![Edit mode, with every field of a site](docs/edit-mode.png)
 

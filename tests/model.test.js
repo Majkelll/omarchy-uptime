@@ -21,6 +21,12 @@ assert.deepStrictEqual(Model.parseAddress("HTTPS://Example.COM/HC"), {
   path: "/HC"
 })
 assert.deepStrictEqual(Model.parseAddress("   "), { origin: "", path: "" })
+// An IPv6 literal keeps its brackets and its port
+assert.deepStrictEqual(Model.parseAddress("http://[::1]:8080/hc"), {
+  origin: "http://[::1]:8080",
+  path: "/hc"
+})
+assert.strictEqual(Model.validate("http://[::1]:8080", "/hc", 60, [], ""), "")
 
 assert.strictEqual(Model.normalizePath("hc"), "/hc")
 assert.strictEqual(Model.normalizePath("/hc/"), "/hc")
@@ -31,6 +37,9 @@ assert.strictEqual(Model.normalizePath("?probe=1"), "?probe=1")
 assert.strictEqual(Model.isPlausibleHost("example.com"), true)
 assert.strictEqual(Model.isPlausibleHost("localhost:3000"), true)
 assert.strictEqual(Model.isPlausibleHost("127.0.0.1"), true)
+assert.strictEqual(Model.isPlausibleHost("[::1]:8080"), true)
+assert.strictEqual(Model.isPlausibleHost("[fe80::1]"), true)
+assert.strictEqual(Model.isPlausibleHost("["), false)
 assert.strictEqual(Model.isPlausibleHost("not a host"), false)
 assert.strictEqual(Model.isPlausibleHost("nodots"), false)
 

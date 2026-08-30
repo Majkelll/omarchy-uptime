@@ -39,7 +39,7 @@ probe() {
     --max-time "$timeout" --connect-timeout "$timeout" \
     --user-agent "$USER_AGENT" \
     --write-out '%{http_code} %{time_total}' \
-    "$url" 2>/dev/null)
+    -- "$url" 2>/dev/null)
   status=$?
 
   code=${output%% *}

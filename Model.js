@@ -96,6 +96,9 @@ function isPlausibleHost(host) {
   var text = clean(host).toLowerCase()
   if (text === "") return false
   if (text.indexOf(" ") !== -1) return false
+  // A bracketed IPv6 literal carries colons of its own, so it is judged whole
+  // rather than split on the first colon the way a host:port pair is.
+  if (text.charAt(0) === "[") return text.indexOf("]") > 1
   var bare = text.split(":")[0]
   return bare.indexOf(".") !== -1 || bare === "localhost" || /^\d+(\.\d+){3}$/.test(bare)
 }
@@ -621,6 +624,9 @@ if (typeof module !== "undefined") {
     DEFAULT_FAILURES: DEFAULT_FAILURES,
     MIN_INTERVAL: MIN_INTERVAL,
     MAX_INTERVAL: MAX_INTERVAL,
+    MIN_TIMEOUT: MIN_TIMEOUT,
+    MAX_TIMEOUT: MAX_TIMEOUT,
+    MAX_FAILURES: MAX_FAILURES,
     MAX_OUTAGES: MAX_OUTAGES,
     clean: clean,
     normalizePath: normalizePath,

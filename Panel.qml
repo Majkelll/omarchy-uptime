@@ -45,6 +45,7 @@ Panel {
   property string draftAddress: ""
   property string draftPath: ""
   property int draftInterval: Model.DEFAULT_INTERVAL
+  property int draftTimeout: Model.DEFAULT_TIMEOUT
   property int draftExpected: 0
   property int draftFailures: Model.DEFAULT_FAILURES
   property bool draftEnabled: true
@@ -137,6 +138,7 @@ Panel {
     root.draftAddress = site.origin
     root.draftPath = site.path
     root.draftInterval = site.intervalSeconds
+    root.draftTimeout = site.timeoutSeconds
     root.draftExpected = site.expectedStatus
     root.draftFailures = site.failuresBeforeAlert
     root.draftEnabled = site.enabled !== false
@@ -162,6 +164,7 @@ Panel {
       origin: root.draftAddress,
       path: root.draftPath,
       intervalSeconds: root.draftInterval,
+      timeoutSeconds: root.draftTimeout,
       expectedStatus: root.draftExpected,
       failuresBeforeAlert: root.draftFailures,
       enabled: root.draftEnabled
@@ -827,16 +830,19 @@ Panel {
                     }
                   }
 
-                  // Equal thirds rather than content widths: the group then
-                  // ends on the same vertical as the three fields above it
-                  // instead of stopping wherever its last spinbox happens to.
-                  Row {
-                    id: numberRow
+                  // Two columns rather than four across: every field a site
+                  // has is editable here, and half the popup width leaves the
+                  // labels room to say what they mean. The grid ends on the
+                  // same vertical as the text fields above it.
+                  Grid {
+                    id: numberGrid
                     width: parent.width
-                    spacing: Style.spacing.controlGap
+                    columns: 2
+                    columnSpacing: Style.spacing.controlGap
+                    rowSpacing: Style.spacing.md
 
                     readonly property real cellWidth:
-                      (width - spacing * 2) / 3
+                      (width - columnSpacing) / 2
 
                     NumberField {
                       id: intervalField
@@ -845,31 +851,43 @@ Panel {
                       from: Model.MIN_INTERVAL
                       to: Model.MAX_INTERVAL
                       stepSize: 10
-                      fieldWidth: numberRow.cellWidth
+                      fieldWidth: numberGrid.cellWidth
                       foreground: root.foreground
                       fontFamily: root.fontFamily
                       onModified: function(next) { root.draftInterval = next }
                     }
 
                     NumberField {
-                      label: "Expect (0=2xx/3xx)"
+                      label: "Give up after (s)"
+                      value: root.draftTimeout
+                      from: Model.MIN_TIMEOUT
+                      to: Model.MAX_TIMEOUT
+                      stepSize: 1
+                      fieldWidth: numberGrid.cellWidth
+                      foreground: root.foreground
+                      fontFamily: root.fontFamily
+                      onModified: function(next) { root.draftTimeout = next }
+                    }
+
+                    NumberField {
+                      label: "Expect (0 = any 2xx/3xx)"
                       value: root.draftExpected
                       from: 0
                       to: 599
                       stepSize: 1
-                      fieldWidth: numberRow.cellWidth
+                      fieldWidth: numberGrid.cellWidth
                       foreground: root.foreground
                       fontFamily: root.fontFamily
                       onModified: function(next) { root.draftExpected = next }
                     }
 
                     NumberField {
-                      label: "Alert after"
+                      label: "Alert after failures"
                       value: root.draftFailures
                       from: 1
-                      to: 10
+                      to: Model.MAX_FAILURES
                       stepSize: 1
-                      fieldWidth: numberRow.cellWidth
+                      fieldWidth: numberGrid.cellWidth
                       foreground: root.foreground
                       fontFamily: root.fontFamily
                       onModified: function(next) { root.draftFailures = next }

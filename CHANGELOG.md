@@ -5,8 +5,8 @@
 - First release: watch a list of sites from the Omarchy bar, with an optional
   health check path per site and its own check interval per site.
 - Edit mode per site behind the pencil button (or `e`): name, address, path,
-  interval, expected status, failure threshold, and paused state, with Save and
-  Cancel and nothing written until you save.
+  interval, timeout, expected status, failure threshold, and paused state, with
+  Save and Cancel and nothing written until you save.
 - Desktop notification when a site goes down and when it comes back; clicking
   either opens the site. A site is only down after a configurable number of
   consecutive failures, so one flaky check never alerts.
