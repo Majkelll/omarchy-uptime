@@ -51,6 +51,17 @@ Click the pulse icon in the bar and add your first site. There is nothing to
 configure by hand before that, and nothing is installed outside your home
 directory.
 
+### Removing it
+
+```bash
+omarchy plugin remove io.github.majkelll.omarchy-uptime
+```
+
+That unloads the widget and deletes the plugin. Your site list and its history
+are left alone, in `~/.config/omarchy-uptime/` and
+`~/.local/state/omarchy-uptime/`, so reinstalling picks up where you left off.
+Delete those two directories to remove them as well.
+
 ## Watching a site
 
 The popup opens with the add form on top, then everything you watch:
