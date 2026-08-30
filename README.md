@@ -37,7 +37,7 @@ three-screen desktop probes each site once and notifies once.
 omarchy plugin add https://github.com/Majkelll/omarchy-uptime.git --enable
 ```
 
-Click the 󰐰 icon in the bar and add your first site. There is nothing to
+Click the pulse icon in the bar and add your first site. There is nothing to
 configure by hand before that, and nothing is installed outside your home
 directory.
 
@@ -56,8 +56,8 @@ the path lands in its own field. Every row then offers three things:
 | | |
 |---|---|
 | **Click the row** | its outage history |
-| 󰏫 | edit everything about it |
-| 󰏌 | open it in your browser |
+| **Pencil button** | edit everything about it |
+| **Open button** | open it in your browser |
 
 ### Outage history
 
