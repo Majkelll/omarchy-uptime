@@ -14,8 +14,11 @@
   how long it lasted, and what the failure was.
 - Bar icon (a pulse) stays quiet while everything answers and turns urgent when
   it does not; it can be hidden entirely until something breaks.
-- The header leads with how many sites are up, and every row says when its
-  reading was taken.
+- The header leads with how many sites are up, and every row names what each
+  of its numbers is: `Up 5m | replied in 200 ms | updated 15s ago`.
+- A play/pause control stops every check at once, persisted across restarts;
+  the bar icon becomes a pause mark so a stopped plugin never reads as a
+  healthy one.
 - Checks run in one background service rather than once per monitor.
 - The machine's own connectivity is probed before any site is, the same way
   `omarchy-network-status` does it. When the connection is down the round is

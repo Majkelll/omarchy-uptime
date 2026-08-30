@@ -85,6 +85,19 @@ until you hit Save, and Escape cancels.
 
 ![Edit mode, with every field of a site](docs/edit-mode.png)
 
+## Stopping it
+
+The play/pause control at the top of the popup (or `p`) stops every check at
+once. Nothing is checked, nothing is recorded and nobody is alerted until you
+start it again — and because no timestamps move while it is stopped, starting
+it checks everything immediately rather than waiting out the longest interval.
+
+The bar icon becomes a pause mark so a stopped plugin never looks like a
+healthy one, and the state is written to `sites.json`, so it survives a
+restart.
+
+![The popup with checks stopped](docs/paused.png)
+
 ## Notifications
 
 When a site crosses into down you get one critical notification; when it
@@ -158,6 +171,7 @@ as an environment variable on the shell session that runs the plugin.
 | `x` | stop watching it |
 | `/` | jump to the add form |
 | `r` | check everything now |
+| `p` | stop or start every check |
 | `Esc` | close the popup, or cancel an edit |
 
 ## Configuration
@@ -169,6 +183,7 @@ it in your dotfiles.
 ```json
 {
   "version": 1,
+  "paused": false,
   "sites": [
     {
       "id": "myapp-hc",
@@ -197,6 +212,9 @@ it in your dotfiles.
 | `failuresBeforeAlert` | Consecutive failures before it counts as down. Default 2. |
 | `enabled` | `false` pauses checks while keeping the site and its history. |
 
+The top-level `paused` stops every check at once — the play/pause control in
+the popup writes it.
+
 Anything out of range is clamped rather than rejected, and a row without a host
 is skipped, so a hand-edited file cannot take the plugin down with it. A file
 that is not valid JSON leaves the running configuration alone and says so in
@@ -217,6 +235,8 @@ omarchy-shell omarchy-uptime check    # check every site now
 omarchy-shell omarchy-uptime status   # "2 of 3 up - myapp is down"
 omarchy-shell omarchy-uptime list     # the site list as JSON
 omarchy-shell omarchy-uptime toggle   # open or close the popup
+omarchy-shell omarchy-uptime pause    # stop every check
+omarchy-shell omarchy-uptime resume   # start again
 ```
 
 `toggle` is what a keybinding wants. In `~/.config/hypr/bindings.conf`:

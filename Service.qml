@@ -32,6 +32,10 @@ Item {
   property var sites: []
   property var records: ({})
 
+  // Stopped by hand from the popup. Nothing is checked, nothing is recorded
+  // and nobody is alerted until it is started again.
+  property bool paused: false
+
   property bool configLoaded: false
   property bool stateLoaded: false
   property string configError: ""
@@ -68,7 +72,10 @@ Item {
     // A file that fails to parse keeps the sites already in memory: dropping
     // them would also drop the schedule mid-edit, and the panel shows the
     // error instead.
-    if (parsed.error === "" || !service.configLoaded) service.sites = parsed.sites
+    if (parsed.error === "" || !service.configLoaded) {
+      service.sites = parsed.sites
+      service.paused = parsed.paused
+    }
     service.configLoaded = true
     Qt.callLater(service.runDueChecks)
   }
@@ -83,9 +90,21 @@ Item {
   function saveSites(next) {
     service.sites = Model.normalizeSites(next)
     service.configError = ""
-    ensureDirsProc.running = true
-    configFile.setText(Model.serializeConfig(service.sites))
+    service.writeConfig()
     Qt.callLater(service.runDueChecks)
+  }
+
+  function setPaused(next) {
+    service.paused = next === true
+    service.writeConfig()
+    // Resuming checks everything at once rather than waiting out the longest
+    // interval: nothing moved while it was stopped, so everything is stale.
+    if (!service.paused) Qt.callLater(function() { service.checkNow("") })
+  }
+
+  function writeConfig() {
+    ensureDirsProc.running = true
+    configFile.setText(Model.serializeConfig(service.sites, service.paused))
   }
 
   function saveState() {
@@ -97,12 +116,14 @@ Item {
   // ---------------------------------------------------------------- checking
 
   function runDueChecks() {
+    if (service.paused) return
     service.startChecks(Model.dueSites(service.sites, service.records, Date.now()))
   }
 
   // Force a check now, for one site or for every enabled one. Bound to the
   // panel's refresh button and to a right-click on the bar icon.
   function checkNow(id) {
+    if (service.paused) return
     var due = []
     for (var i = 0; i < service.sites.length; i++) {
       var site = service.sites[i]
@@ -307,9 +328,12 @@ Item {
 
     function check(): void { service.checkNow("") }
     function status(): string {
+      if (service.paused) return Model.PAUSED_TEXT
       return service.networkOffline ? Model.OFFLINE_TEXT : service.summary.text
     }
-    function list(): string { return Model.serializeConfig(service.sites) }
+    function pause(): void { service.setPaused(true) }
+    function resume(): void { service.setPaused(false) }
+    function list(): string { return Model.serializeConfig(service.sites, service.paused) }
     function open(): void { service.callSurfaces("open", false) }
     function close(): void { service.callSurfaces("close", true) }
     function toggle(): void { service.callSurfaces("toggle", false) }

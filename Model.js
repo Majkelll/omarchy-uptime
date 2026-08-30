@@ -19,6 +19,10 @@ var MAX_OUTAGES = 50
 // Shown wherever the summary would otherwise claim to know something.
 var OFFLINE_TEXT = "No connection - checks paused"
 
+// The whole plugin stopped on purpose, which is a different thing from a site
+// being paused and a different thing again from having no connection.
+var PAUSED_TEXT = "Checks paused"
+
 // Used only when the active theme carries neither an orange nor a yellow.
 var DEFAULT_WARNING = "#e0a458"
 
@@ -175,23 +179,26 @@ function normalizeSites(list) {
 // that silently forgot every site.
 function parseConfig(text) {
   var raw = clean(text)
-  if (raw === "") return { sites: [], error: "" }
+  if (raw === "") return { sites: [], paused: false, error: "" }
 
   var parsed
   try {
     parsed = JSON.parse(raw)
   } catch (error) {
-    return { sites: [], error: "sites.json is not valid JSON" }
+    return { sites: [], paused: false, error: "sites.json is not valid JSON" }
   }
 
   var list = Array.isArray(parsed)
     ? parsed
     : (parsed && Array.isArray(parsed.sites) ? parsed.sites : null)
-  if (list === null) return { sites: [], error: "sites.json has no sites array" }
-  return { sites: normalizeSites(list), error: "" }
+  if (list === null) return { sites: [], paused: false, error: "sites.json has no sites array" }
+  // Stopping the plugin outlives a restart: it lives in the file, next to the
+  // sites it stops.
+  var paused = !Array.isArray(parsed) && parsed.paused === true
+  return { sites: normalizeSites(list), paused: paused, error: "" }
 }
 
-function serializeConfig(sites) {
+function serializeConfig(sites, paused) {
   var rows = []
   var list = Array.isArray(sites) ? sites : []
   for (var i = 0; i < list.length; i++) {
@@ -208,7 +215,7 @@ function serializeConfig(sites) {
       enabled: site.enabled !== false
     })
   }
-  return JSON.stringify({ version: 1, sites: rows }, null, 2) + "\n"
+  return JSON.stringify({ version: 1, paused: paused === true, sites: rows }, null, 2) + "\n"
 }
 
 function buildSite(addressRaw, pathRaw, intervalRaw, sites) {
@@ -590,11 +597,15 @@ function formatStamp(epochMs) {
   return pad(at.getDate()) + " " + MONTHS[at.getMonth()] + " " + pad(at.getHours()) + ":" + pad(at.getMinutes())
 }
 
+// "just now" covers ten seconds, not the three quarters of a minute a rounder
+// threshold would: sites are commonly checked every 60s, and a window that
+// wide would label almost every reading's whole life "just now" - which is
+// precisely the staleness this is here to expose.
 function formatAgo(epochMs, nowMs) {
   var value = toInt(epochMs, 0)
   if (value <= 0) return "never"
   var elapsed = Math.max(0, nowMs - value)
-  if (elapsed < 45000) return "just now"
+  if (elapsed < 10000) return "just now"
   return formatDuration(elapsed) + " ago"
 }
 
@@ -614,32 +625,35 @@ function failureLabel(record) {
   return reason === "" ? "no answer" : reason
 }
 
+// Three labelled parts, so a row says what each number means instead of
+// leaving the reader to work out which duration is which:
+//   Up 5m | replied in 200 ms | updated 2m ago
 function statusLine(site, record, nowMs) {
   if (site && site.enabled === false) return "Paused"
   var current = normalizeRecord(record)
   if (current.state === "unknown") return current.checkedAt > 0 ? "Checking..." : "Not checked yet"
 
+  var parts = []
+
   if (current.state === "down") {
-    var since = current.since > 0 ? "Down " + formatDuration(nowMs - current.since) : "Down"
-    return withCheckedAt(since + " - " + failureLabel(current), current, nowMs)
+    parts.push(current.since > 0 ? "Down " + formatDuration(nowMs - current.since) : "Down")
+    parts.push(failureLabel(current))
+  } else {
+    parts.push(current.since > 0 ? "Up " + formatDuration(nowMs - current.since) : "Up")
+    // A site failing right now without having crossed its threshold is worth
+    // more than how fast the last good answer came back.
+    if (current.failures > 0) {
+      parts.push(current.failures + " failing check" + (current.failures === 1 ? "" : "s"))
+    } else {
+      var latency = latencyLabel(current)
+      if (latency !== "") parts.push("replied in " + latency)
+    }
   }
 
-  var line = "Up"
-  if (current.since > 0) line += " " + formatDuration(nowMs - current.since)
-  var latency = latencyLabel(current)
-  if (latency !== "") line += " - " + latency
-  // A site that has recovered but is failing again right now is still "up",
-  // and hiding that would make the next alert look like it came from nowhere.
-  if (current.failures > 0) line += " - " + current.failures + " failing check" + (current.failures === 1 ? "" : "s")
-  return withCheckedAt(line, current, nowMs)
-}
-
-// When a reading is from is as much a part of it as the reading itself: "Up 2h"
-// off a check that last ran an hour ago says something very different from the
-// same line a second old.
-function withCheckedAt(line, record, nowMs) {
-  if (record.checkedAt <= 0) return line
-  return line + " - checked " + formatAgo(record.checkedAt, nowMs)
+  // How old the reading is belongs on every line: "Up 2h" from a check that
+  // last ran an hour ago is a different claim from the same line a second old.
+  if (current.checkedAt > 0) parts.push("updated " + formatAgo(current.checkedAt, nowMs))
+  return parts.join(" | ")
 }
 
 // The one-line summary of how a site is checked, shown where the settings used
@@ -688,6 +702,7 @@ if (typeof module !== "undefined") {
     MAX_FAILURES: MAX_FAILURES,
     MAX_OUTAGES: MAX_OUTAGES,
     OFFLINE_TEXT: OFFLINE_TEXT,
+    PAUSED_TEXT: PAUSED_TEXT,
     DEFAULT_WARNING: DEFAULT_WARNING,
     clean: clean,
     normalizePath: normalizePath,

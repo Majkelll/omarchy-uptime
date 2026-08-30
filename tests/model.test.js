@@ -75,7 +75,7 @@ assert.deepStrictEqual(Model.normalizeSites([{ name: "nothing" }, { origin: "a.t
 
 // ------------------------------------------------------------------- config
 
-assert.deepStrictEqual(Model.parseConfig(""), { sites: [], error: "" })
+assert.deepStrictEqual(Model.parseConfig(""), { sites: [], paused: false, error: "" })
 assert.strictEqual(Model.parseConfig("{ nope").error, "sites.json is not valid JSON")
 assert.strictEqual(Model.parseConfig('{"version":1}').error, "sites.json has no sites array")
 
@@ -84,6 +84,11 @@ assert.strictEqual(Model.parseConfig('[{"origin":"a.test"}]').sites.length, 1)
 
 const roundTripped = Model.parseConfig(Model.serializeConfig(twins)).sites
 assert.deepStrictEqual(roundTripped, twins)
+
+// Stopping the plugin survives a restart, and a bare array is simply not paused
+assert.strictEqual(Model.parseConfig(Model.serializeConfig(twins, true)).paused, true)
+assert.strictEqual(Model.parseConfig(Model.serializeConfig(twins, false)).paused, false)
+assert.strictEqual(Model.parseConfig('[{"origin":"a.test"}]').paused, false)
 
 // ---------------------------------------------------------------- validation
 
@@ -315,6 +320,10 @@ assert.strictEqual(Model.formatStamp(0), "")
 
 assert.strictEqual(Model.formatAgo(0, now), "never")
 assert.strictEqual(Model.formatAgo(now - 5000, now), "just now")
+// A reading past the ten second window reports its real age rather than
+// hiding most of a 60s check interval behind "just now"
+assert.strictEqual(Model.formatAgo(now - 24_000, now), "24s ago")
+assert.strictEqual(Model.formatAgo(now - 59_000, now), "59s ago")
 assert.strictEqual(Model.formatAgo(now - 300_000, now), "5m ago")
 
 assert.strictEqual(Model.latencyLabel({ latencyMs: 84 }), "84 ms")
@@ -325,36 +334,47 @@ assert.strictEqual(Model.failureLabel({ code: "503", reason: "" }), "HTTP 503")
 assert.strictEqual(Model.failureLabel({ code: "000", reason: "timeout" }), "timeout")
 assert.strictEqual(Model.failureLabel({ code: "000", reason: "" }), "no answer")
 
+// Every line names what each number is, and says how old the reading is.
 const downRecord = Object.assign(Model.emptyRecord(), {
   state: "down", since: now - 300_000, code: "503", checkedAt: now - 8000
 })
 assert.strictEqual(Model.statusLine(watched[0], downRecord, now),
-  "Down 5m - HTTP 503 - checked just now")
+  "Down 5m | HTTP 503 | updated just now")
+assert.strictEqual(
+  Model.statusLine(watched[0], Object.assign({}, downRecord, { checkedAt: now - 30_000 }), now),
+  "Down 5m | HTTP 503 | updated 30s ago")
 
 const upRecord = Object.assign(Model.emptyRecord(), {
   state: "up", since: now - 7_200_000, latencyMs: 84, checkedAt: now - 120_000
 })
-assert.strictEqual(Model.statusLine(watched[0], upRecord, now), "Up 2h - 84 ms - checked 2m ago")
+assert.strictEqual(Model.statusLine(watched[0], upRecord, now),
+  "Up 2h | replied in 84 ms | updated 2m ago")
+
+// The regression this format exists for: a reading that is minutes old must
+// say so. The panel used to derive its clock from the checks themselves, so
+// every row claimed "just now" however stale it really was.
+const stale = Object.assign({}, upRecord, { checkedAt: now - 45 * 60_000 })
+assert.strictEqual(Model.statusLine(watched[0], stale, now),
+  "Up 2h | replied in 84 ms | updated 45m ago")
+assert.strictEqual(
+  Model.statusLine(watched[0], Object.assign({}, upRecord, { checkedAt: now - 3_600_000 }), now),
+  "Up 2h | replied in 84 ms | updated 1h ago")
+
+// Failing right now, but not yet down: that outranks the last good latency
+assert.strictEqual(
+  Model.statusLine(watched[0], Object.assign({}, upRecord, { failures: 1 }), now),
+  "Up 2h | 1 failing check | updated 2m ago")
+assert.strictEqual(
+  Model.statusLine(watched[0], Object.assign({}, upRecord, { failures: 2 }), now),
+  "Up 2h | 2 failing checks | updated 2m ago")
 
 // A record with no check behind it says nothing about when it was read
 assert.strictEqual(
   Model.statusLine(watched[0], Object.assign({}, upRecord, { checkedAt: 0 }), now),
-  "Up 2h - 84 ms")
-
-// A site that is failing but not yet down says so, so the next alert is no surprise
-assert.strictEqual(
-  Model.statusLine(watched[0], Object.assign({}, upRecord, { failures: 1 }), now),
-  "Up 2h - 84 ms - 1 failing check - checked 2m ago")
+  "Up 2h | replied in 84 ms")
 
 assert.strictEqual(Model.statusLine(watched[0], Model.emptyRecord(), now), "Not checked yet")
 assert.strictEqual(Model.statusLine(watched[3], Model.emptyRecord(), now), "Paused")
-
-assert.strictEqual(Model.scheduleLine(watched[0]),
-  "Every 1m - expects any 2xx/3xx - alerts after 2 failures")
-assert.strictEqual(
-  Model.scheduleLine(Model.normalizeSite(
-    { origin: "a.test", intervalSeconds: 30, expectedStatus: 204, failuresBeforeAlert: 1, enabled: false }, [])),
-  "Every 30s - expects 204 - alerts after 1 failure - paused")
 
 assert.strictEqual(Model.outageLabel({ startedAt: stampAt, endedAt: stampAt + 840_000 }, now),
   "28 Aug 09:05 - 14m")

@@ -61,17 +61,22 @@ BarWidget {
   Component.onCompleted: root.syncRegistration()
   Component.onDestruction: if (root.registeredService) root.registeredService.unregisterSurface(root)
 
-  readonly property bool offline: service ? service.networkOffline : false
+  readonly property bool paused: service ? service.paused : false
+  readonly property bool offline: !paused && (service ? service.networkOffline : false)
   readonly property color warningColor: service ? service.warningColor : Model.DEFAULT_WARNING
 
-  // Three states, three colours. Offline is the theme's orange rather than its
-  // urgent red: nothing is known to be down, the machine just cannot look.
-  readonly property bool alerting: !offline && summary.state === "down"
-  readonly property bool waiting: !offline && (summary.state === "pending" || summary.state === "empty")
+  // Four states, told apart at a glance. Stopped by hand is a pause glyph, not
+  // a pulse - there is no heartbeat to draw. Offline is the theme's orange
+  // rather than its urgent red: nothing is known to be down, the machine just
+  // cannot look.
+  readonly property bool alerting: !offline && !paused && summary.state === "down"
+  readonly property bool waiting: !offline && !paused
+    && (summary.state === "pending" || summary.state === "empty")
 
   readonly property string tooltip: {
     if (!service) return "Uptime"
     if (service.configError !== "") return service.configError
+    if (root.paused) return Model.PAUSED_TEXT + " - click to open, then resume"
     if (root.offline) {
       return service.networkDetail === ""
         ? Model.OFFLINE_TEXT
@@ -80,7 +85,7 @@ BarWidget {
     return summary.text
   }
 
-  visible: !hideWhenHealthy || alerting
+  visible: !hideWhenHealthy || alerting || paused
   implicitWidth: visible ? button.implicitWidth : 0
   implicitHeight: button.implicitHeight
 
@@ -101,11 +106,11 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "󰐰"
+    text: root.paused ? "󰏤" : "󰐰"
     fontSize: Style.font.icon
     active: root.alerting || root.offline
     activeColor: root.offline ? root.warningColor : (bar ? bar.urgent : Color.urgent)
-    dimmed: root.waiting
+    dimmed: root.waiting || root.paused
     tooltipText: root.tooltip
     onPressed: function(mouseButton) {
       if (mouseButton === Qt.RightButton) {

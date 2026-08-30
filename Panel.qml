@@ -26,7 +26,11 @@ Panel {
   readonly property int revision: service ? service.revision : 0
   readonly property bool checking: service ? service.checking : false
   readonly property string configError: service ? service.configError : ""
-  readonly property bool networkOffline: service ? service.networkOffline : false
+  readonly property bool paused: service ? service.paused : false
+  readonly property bool networkOffline: !paused && (service ? service.networkOffline : false)
+  // Both states mean the same thing to every number below: it is the last
+  // thing that was known, not the current state.
+  readonly property bool stale: paused || networkOffline
   readonly property string networkDetail: service ? service.networkDetail : ""
   readonly property color warningColor: service ? service.warningColor : Model.DEFAULT_WARNING
   readonly property string browserCommand: service && service.browserCommand !== ""
@@ -77,12 +81,23 @@ Panel {
   readonly property real dotColumn: Style.space(18)
   readonly property real detailIndent: Style.spacing.rowPaddingX + dotColumn
 
-  // One clock reading the whole panel shares, refreshed whenever a check lands
-  // or a minute passes. Without it every relative time would be frozen at the
-  // moment its Text was first evaluated.
+  // One clock the whole panel shares. `revision` alone is not enough to drive
+  // it: sites are checked in one batch, so every moment the panel re-rendered
+  // was a moment every site had just been checked, and every row claimed to be
+  // "updated just now" however stale the reading really was. `tick` advances on
+  // its own while the panel is open, so the ages on screen actually age.
+  property int tick: 0
   readonly property double nowMs: {
     root.revision
+    root.tick
     return Date.now()
+  }
+
+  Timer {
+    interval: 5000
+    repeat: true
+    running: root.opened
+    onTriggered: root.tick = root.tick + 1
   }
 
   function colorForState(state) {
@@ -91,9 +106,12 @@ Panel {
     return root.faint
   }
 
+  // Opening deliberately does not force a round of checks. It used to, which
+  // made "updated just now" true by construction every time anyone looked -
+  // exactly the staleness the line exists to report. The schedule keeps the
+  // rows fresh; the refresh button and `r` are there for when you want it now.
   function open() {
     root.controller.show()
-    if (service) service.checkNow("")
     Qt.callLater(function() { if (root.opened) keyCatcher.forceActiveFocus() })
   }
 
@@ -202,6 +220,10 @@ Panel {
 
   function refresh(id) {
     if (service) service.checkNow(id === undefined ? "" : id)
+  }
+
+  function togglePaused() {
+    if (service) service.setPaused(!root.paused)
   }
 
   // A site can vanish from under an open block - sites.json is a file people
@@ -345,6 +367,63 @@ Panel {
     }
   }
 
+  // The one loud thing in the panel. Used for the two states where every
+  // number below it is a memory rather than a reading.
+  component StateBanner: BorderSurface {
+    id: banner
+
+    property color tone: root.foreground
+    property string glyph: ""
+    property string title: ""
+    property string detail: ""
+
+    width: parent ? parent.width : 0
+    implicitHeight: bannerRow.implicitHeight + Style.spacing.xxl
+    radius: Style.cornerRadius
+    color: Style.hoverFillFor(banner.tone, banner.tone)
+    borderSpec: Border.controlSpec("selected", banner.tone, banner.tone)
+
+    Row {
+      id: bannerRow
+      anchors.centerIn: parent
+      width: parent.width - Style.spacing.huge * 2
+      spacing: Style.spacing.controlGap
+
+      Text {
+        text: banner.glyph
+        color: banner.tone
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.icon
+        anchors.verticalCenter: parent.verticalCenter
+      }
+
+      Column {
+        width: parent.width - Style.space(28)
+        spacing: Style.spacing.xxs
+        anchors.verticalCenter: parent.verticalCenter
+
+        Text {
+          width: parent.width
+          text: banner.title
+          color: banner.tone
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          font.bold: true
+          elide: Text.ElideRight
+        }
+
+        Text {
+          width: parent.width
+          text: banner.detail
+          color: banner.tone
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          elide: Text.ElideRight
+        }
+      }
+    }
+  }
+
   KeyboardPanel {
     id: panel
     anchorItem: root.anchorItem
@@ -372,6 +451,7 @@ Panel {
         else if (text === "r" || text === "R") root.refresh()
         else if (text === "o" || text === "O") root.openSite(root.selectedSite())
         else if (text === "e" || text === "E") root.startEdit(root.selectedSite())
+        else if (text === "p" || text === "P") root.togglePaused()
       }
 
       Flickable {
@@ -401,88 +481,72 @@ Panel {
 
           PanelHero {
             title: "Uptime"
-            // Offline, the summary is the last thing that was known rather
-            // than the current state, and it has to say so.
-            meta: root.networkOffline ? "Last known - " + root.summary.text : root.summary.text
+            // Stopped or offline, the summary is the last thing that was
+            // known rather than the current state, and it has to say so.
+            meta: root.stale ? "Last known - " + root.summary.text : root.summary.text
             foreground: root.foreground
             fontFamily: root.fontFamily
 
             iconComponent: Component {
               Text {
-                text: "󰐰"
-                color: root.networkOffline
-                  ? root.warningColor
-                  : (root.summary.state === "down" ? Color.urgent : root.foreground)
+                text: root.paused ? "󰏤" : "󰐰"
+                color: root.paused
+                  ? root.faint
+                  : (root.networkOffline
+                    ? root.warningColor
+                    : (root.summary.state === "down" ? Color.urgent : root.foreground))
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.display
               }
             }
 
             trailingControl: Component {
-              PanelActionButton {
-                iconText: "󰑐"
-                tooltipText: "Check every site now"
-                foreground: root.foreground
-                hoverColor: Color.accent
-                fontFamily: root.fontFamily
-                enabled: !root.checking && root.sites.length > 0
-                opacity: enabled ? 1 : 0.4
-                onClicked: root.refresh()
+              Row {
+                spacing: Style.spacing.xs
+
+                PanelActionButton {
+                  iconText: root.paused ? "󰐊" : "󰏤"
+                  tooltipText: root.paused ? "Start checking again" : "Stop checking"
+                  foreground: root.foreground
+                  hoverColor: Color.accent
+                  fontFamily: root.fontFamily
+                  enabled: root.sites.length > 0
+                  opacity: enabled ? 1 : 0.4
+                  onClicked: root.togglePaused()
+                }
+
+                PanelActionButton {
+                  iconText: "󰑐"
+                  tooltipText: "Check every site now"
+                  foreground: root.foreground
+                  hoverColor: Color.accent
+                  fontFamily: root.fontFamily
+                  enabled: !root.checking && !root.paused && root.sites.length > 0
+                  opacity: enabled ? 1 : 0.4
+                  onClicked: root.refresh()
+                }
               }
             }
           }
 
+          StateBanner {
+            visible: root.paused
+            tone: root.foreground
+            glyph: "󰏤"
+            title: "Checks stopped"
+            detail: "Nothing is being checked - press play above to start again"
+          }
+
           // Unmissable on purpose: while the machine is offline, every line
           // below it is the last thing that was known, not the current state.
-          BorderSurface {
+          StateBanner {
             visible: root.networkOffline
-            width: parent.width
-            implicitHeight: offlineRow.implicitHeight + Style.spacing.xxl
-            radius: Style.cornerRadius
-            color: Style.hoverFillFor(root.warningColor, root.warningColor)
-            borderSpec: Border.controlSpec("selected", root.warningColor, root.warningColor)
-
-            Row {
-              id: offlineRow
-              anchors.centerIn: parent
-              width: parent.width - Style.spacing.huge * 2
-              spacing: Style.spacing.controlGap
-
-              Text {
-                text: "󰖪"
-                color: root.warningColor
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.icon
-                anchors.verticalCenter: parent.verticalCenter
-              }
-
-              Column {
-                width: parent.width - Style.space(28)
-                spacing: Style.spacing.xxs
-                anchors.verticalCenter: parent.verticalCenter
-
-                Text {
-                  width: parent.width
-                  text: "No internet connection"
-                  color: root.warningColor
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                  elide: Text.ElideRight
-                }
-
-                Text {
-                  width: parent.width
-                  text: root.networkDetail === ""
-                    ? "Checks are paused until it comes back"
-                    : "Checks are paused - " + root.networkDetail
-                  color: root.warningColor
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  elide: Text.ElideRight
-                }
-              }
-            }
+            tone: root.warningColor
+            glyph: "󰖪"
+            title: "No internet connection"
+            detail: root.networkDetail === ""
+              ? "Checks are paused until it comes back"
+              : "Checks are paused - " + root.networkDetail
           }
 
           PanelSeparator { foreground: root.foreground }
@@ -1024,7 +1088,7 @@ Panel {
           }
 
           Text {
-            text: "Enter history - e edit - o open - x stop watching - / add - r check now"
+            text: "Enter history - e edit - o open - x stop watching - / add - r check now - p pause"
             color: root.faint
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
